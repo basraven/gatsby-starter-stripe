@@ -19,41 +19,39 @@ export const ProductList = () => {
           <tr>
             <th>Name</th>
             <th>Price</th>
-            <th>Inventory</th>
           </tr>
         </thead>
         <tbody>
-          {products.map(({ id, name, skus, active }) => (
+          {products.map(({ id, name, prices, active }) => (
             <React.Fragment key={id}>
               <tr>
                 <td>
                   <input type="checkbox" checked={active} readOnly />{" "}
                   <Link to={`/admin/products/${id}`}>{name}</Link>
                 </td>
-                <td>{skus.length === 1 && (skus[0].price / 100).toFixed(2)}</td>
                 <td>
-                  {skus.length === 1 &&
-                    (skus[0].inventory.value ??
-                      skus[0].inventory.quantity ??
-                      "∞")}
+                  {prices.length === 1
+                    ? (prices[0].unit_amount / 100).toFixed(2)
+                    : "-"}
                 </td>
               </tr>
-              {skus.length > 1 &&
-                skus.map(({ id, price, inventory, attributes }) => (
-                  <tr key={id}>
-                    <td>
-                      <span style={{ marginLeft: "2rem" }}>
-                        {attributes.name}
-                      </span>
-                    </td>
-                    <td>{(price / 100).toFixed(2)}</td>
-                    <td>
-                      {skus[0].inventory.value ??
-                        skus[0].inventory.quantity ??
-                        "∞"}
-                    </td>
-                  </tr>
-                ))}
+              {prices.length > 1 &&
+                prices.map(
+                  ({ id, unit_amount: unitAmount, nickname, active }) => (
+                    <tr key={id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={active}
+                          readOnly
+                          style={{ marginLeft: "2rem" }}
+                        />{" "}
+                        <span>{nickname}</span>
+                      </td>
+                      <td>{(unitAmount / 100).toFixed(2)}</td>
+                    </tr>
+                  )
+                )}
             </React.Fragment>
           ))}
         </tbody>

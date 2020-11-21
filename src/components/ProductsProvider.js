@@ -5,10 +5,10 @@ import { useStaticQuery, graphql } from "gatsby"
 export const ProductsContext = React.createContext()
 
 /**
- * Wrapper to give Provider access to Sku nodes from Gatsby's GraphQL store.
+ * Wrapper to give Provider access to Price nodes from Gatsby's GraphQL store.
  */
 const ProductsProvider = ({ children }) => {
-  const data = useStaticQuery(skusQuery)
+  const data = useStaticQuery(pricesQuery)
   return <Provider data={data}>{children}</Provider>
 }
 
@@ -17,15 +17,15 @@ ProductsProvider.propTypes = {
 }
 
 /**
- * Shares product & sku data through Context.
+ * Shares Product & Price data through Context.
  * Products are first loaded from Gatsby's GraphQL store and then updated with
  * current information from Stripe.
  */
 const Provider = ({ data, children }) => {
   // Load product data from Gatsby store
-  const [initialProducts, initialSkus] = processGatsbyData(data)
+  const [initialProducts, initialPrices] = processGatsbyData(data)
   const [products, setProducts] = useState(initialProducts)
-  const [skus, setSkus] = useState(initialSkus)
+  const [prices, setPrices] = useState(initialPrices)
 
   // On render and update, update products with live data
   useEffect(() => {
@@ -34,7 +34,7 @@ const Provider = ({ data, children }) => {
 
   /** Query live data from Stripe and update products */
   const updateProducts = async () => {
-    const { data, error } = await fetch("/.netlify/functions/skuList")
+    const { data, error } = await fetch("/.netlify/functions/priceList")
       .then(response => response.json())
       .catch(error => console.error(error))
 
@@ -43,16 +43,16 @@ const Provider = ({ data, children }) => {
       return
     }
 
-    const [liveProducts, liveSkus] = mergeStripeData(data, products)
+    const [liveProducts, livePrices] = mergeStripeData(data, products)
     setProducts(liveProducts)
-    setSkus(liveSkus)
+    setPrices(livePrices)
   }
 
   return (
     <ProductsContext.Provider
       value={{
         products,
-        skus,
+        prices,
         listProducts: sortFn => {
           const fn = sortFn || ((a, b) => b.created - a.created)
           return Object.values(products).sort(fn)
@@ -72,58 +72,55 @@ Provider.propTypes = {
 /** Normalize structure of data sourced from Gatsby's GraphQL store */
 const processGatsbyData = data => {
   const products = {}
-  const skus = {}
-  // Sku nodes are grouped by product
-  data.allStripeSku.group.forEach(group => {
-    const sku = group.edges[0].node
-    const product = { slug: sku.fields.slug, ...sku.product }
-    product.skus = group.edges.map(({ node }) => {
-      skus[node.id] = node
+  const prices = {}
+  // Price nodes are grouped by product
+  data.allStripePrice.group.forEach(group => {
+    const price = group.edges[0].node
+    const product = { slug: price.fields.slug, ...price.product }
+    product.prices = group.edges.map(({ node }) => {
+      prices[node.id] = node
       return node
     })
     products[product.id] = product
   })
-  return [products, skus]
+  return [products, prices]
 }
 
 /** Normalize & merge in structure of live data sourced from Stripe */
 const mergeStripeData = (stripeData, products) => {
-  const stripeProducts = {}
-  const stripeSkus = {}
-  stripeData.forEach(stripeSku => {
-    const { id } = stripeSku.product
-    const gatsbySku = products[id].skus.find(x => x.id === stripeSku.id)
-    const updatedSku = Object.assign(stripeSku, gatsbySku)
-    if (!stripeProducts[id]) {
-      stripeSku.product.slug = products[id].slug
-      stripeProducts[id] = { ...stripeSku.product, skus: [] }
+  const mergedProducts = {}
+  const mergedPrices = {}
+  stripeData.forEach(stripePrice => {
+    const { id } = stripePrice.product
+    const gatsbyPrice = products[id].prices.find(x => x.id === stripePrice.id)
+    const updatedPrice = Object.assign(stripePrice, gatsbyPrice)
+    if (!mergedProducts[id]) {
+      stripePrice.product.slug = products[id].slug
+      mergedProducts[id] = {
+        ...products[id],
+        ...stripePrice.product,
+        prices: [],
+      }
     }
-    stripeProducts[id].skus.push(updatedSku)
-    stripeSkus[updatedSku.id] = updatedSku
+    mergedProducts[id].prices.push(updatedPrice)
+    mergedPrices[updatedPrice.id] = updatedPrice
   })
-  return [stripeProducts, stripeSkus]
+  return [mergedProducts, mergedPrices]
 }
 
-export const skuFragment = graphql`
-  fragment Sku on StripeSku {
+export const priceFragment = graphql`
+  fragment Price on StripePrice {
     id
-    price
+    unit_amount
+    nickname
     fields {
       slug
-    }
-    inventory {
-      type
-      quantity
-    }
-    attributes {
-      name
     }
     product {
       id
       name
       description
       active
-      caption
       created
       updated
       images
@@ -135,24 +132,17 @@ export const skuFragment = graphql`
         }
       }
     }
-    localFiles {
-      childImageSharp {
-        fluid(maxWidth: $maxWidth, quality: $quality) {
-          ...GatsbyImageSharpFluid_withWebp_tracedSVG
-        }
-      }
-    }
   }
 `
 
-const skusQuery = graphql`
-  query skusQuery($maxWidth: Int = 500, $quality: Int = 92) {
-    allStripeSku {
+const pricesQuery = graphql`
+  query pricesQuery($maxWidth: Int = 500, $quality: Int = 92) {
+    allStripePrice {
       group(field: product___id) {
         fieldValue
         edges {
           node {
-            ...Sku
+            ...Price
           }
         }
       }
